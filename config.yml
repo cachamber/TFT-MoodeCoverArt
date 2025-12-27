@@ -10,17 +10,21 @@ display:
   # Display Time Bar:
   # 1=time bar displayed
   # 0=no time bar displayed
-  timebar: 1
+  timebar: 0
 
   # mode=0 for pirate audio and display boards with cs pin
   # mode=3 for display boards without cs pin
   mode: 0
 
+  # Display rotation in degrees
+  # rotation = 0, 90, 180, or 270
+  rotation: 270
+
   # Turn backlight off when mpd state=stop
   # back on when play restarted
   # blank=0 screen will not blank when mpd state=stop
   # blank=n screen will blank after roughly n seconds when mpd state=stop
-  blank: 0
+  blank: 60
 
 # Option for screen to blank on pause
   # pauseblank = 0 for display to stay on
@@ -38,6 +42,19 @@ display:
   #  original coding kept as this is a personal preference]
   # ppbutton = 0 for original play pause putton display
   # ppbutton = 1 for play and pause buttons switched for display
-  ppbutton: 0
+  ppbutton: 1
+
+  # Text scroll speed for marquee effect
+  # Higher values = faster scrolling
+  # scrollspeed = 1 for slow scrolling
+  # scrollspeed = 2 for medium scrolling (default)
+  # scrollspeed = 3+ for faster scrolling
+  scrollspeed: 30
+
+  # SPI bus speed in Hz for display communication
+  # Higher speeds = faster screen updates
+  # Typical range: 4000000 to 100000000 (4 MHz to 100 MHz)
+  # Default: 100000000 (100 MHz)
+  spi_speed_hz: 100000000
 
   

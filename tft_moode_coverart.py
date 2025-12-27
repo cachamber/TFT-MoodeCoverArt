@@ -1,3 +1,20 @@
+"""TFT-MoodeCoverArt Display Application
+
+Displays album artwork and metadata from Moode Audio Player on ST7789 TFT displays.
+Supports Pimoroni Pirate Audio boards and compatible 240x240 TFT screens.
+
+Features:
+- Cover art display with metadata overlay
+- Smooth continuous text scrolling
+- Configurable display options via config.yml
+- Support for multiple audio sources (Library, Radio, Bluetooth, Airplay, Spotify)
+- Optimized rendering with caching and change detection
+
+Author: Original by rusconi, Enhanced fork by cachamber
+Version: 0.0.9
+License: See LICENSE file
+"""
+
 from PIL import Image, ImageDraw, ImageColor, ImageFont, ImageStat
 import subprocess
 import time
@@ -9,14 +26,14 @@ import RPi.GPIO as GPIO
 from mediafile import MediaFile
 from io import BytesIO
 from numpy import mean 
-import ST7789
+import st7789
 from PIL import ImageFilter
 import yaml
 import urllib.parse
 
 # set default config for pirate audio
 
-__version__ = "0.0.9"
+__version__ = "0.1.0"
 
 # get the path of the script
 script_path = os.path.dirname(os.path.abspath( __file__ ))
@@ -30,6 +47,9 @@ BLANK=0
 SHADE=0
 PPBUTTON=0
 PAUSEBLANK=0
+SCROLLSPEED=2
+ROTATION=0
+SPI_SPEED=100000000
 
 confile = 'config.yml'
 
@@ -38,14 +58,17 @@ if path.exists(confile):
  
     with open(confile) as config_file:
         data = yaml.load(config_file, Loader=yaml.FullLoader)
-        displayConf = data['display']
-        OVERLAY = displayConf['overlay']
-        MODE = displayConf['mode']
-        TIMEBAR = displayConf['timebar']
-        BLANK = displayConf['blank']
-        SHADE = displayConf['shadow']
-        PPBUTTON = displayConf['ppbutton']
-        PAUSEBLANK = displayConf["pauseblank"]
+        displayConf = data.get('display', {})
+        OVERLAY = displayConf.get('overlay', OVERLAY)
+        MODE = displayConf.get('mode', MODE)
+        TIMEBAR = displayConf.get('timebar', TIMEBAR)
+        BLANK = displayConf.get('blank', BLANK)
+        SHADE = displayConf.get('shadow', SHADE)
+        PPBUTTON = displayConf.get('ppbutton', PPBUTTON)
+        PAUSEBLANK = displayConf.get('pauseblank', PAUSEBLANK)
+        SCROLLSPEED = displayConf.get('scrollspeed', SCROLLSPEED)
+        ROTATION = displayConf.get('rotation', ROTATION)
+        SPI_SPEED = displayConf.get('spi_speed_hz', SPI_SPEED) 
 
 
 
@@ -53,23 +76,23 @@ if path.exists(confile):
 # Standard SPI connections for ST7789
 # Create ST7789 LCD display class.
 if MODE == 3:    
-    disp = ST7789.ST7789(
+    disp = st7789.ST7789(
         port=0,
-        cs=ST7789.BG_SPI_CS_FRONT,  # GPIO 8, Physical pin 24
+        cs=st7789.BG_SPI_CS_FRONT,  # GPIO 8, Physical pin 24
         dc=9,
         rst=22,
-        backlight=13,               
-        mode=3,
-        rotation=0,
-        spi_speed_hz=80 * 1000 * 1000
+        backlight=13,
+        rotation=ROTATION,
+        spi_speed_hz=SPI_SPEED
     )   
 else:   
-    disp = ST7789.ST7789(
+    disp = st7789.ST7789(
         port=0,
-        cs=ST7789.BG_SPI_CS_FRONT,  # GPIO 8, Physical pin 24 
+        cs=st7789.BG_SPI_CS_FRONT,  # GPIO 8, Physical pin 24 
         dc=9,
-        backlight=13,               
-        spi_speed_hz=80 * 1000 * 1000
+        backlight=13,
+        rotation=ROTATION,
+        spi_speed_hz=SPI_SPEED
     )
 
 
@@ -89,31 +112,44 @@ img = Image.new('RGB', (240, 240), color=(0, 0, 0, 25))
 
 if PPBUTTON == 1:
     # reversed play and pause icons
-    pause_icons = Image.open(script_path + '/images/controls-play.png').resize((240,240), resample=Image.LANCZOS).convert("RGBA")
-    pause_icons_dark = Image.open(script_path + '/images/controls-play-dark.png').resize((240,240), resample=Image.LANCZOS).convert("RGBA")
-    play_icons = Image.open(script_path + '/images/controls-pause.png').resize((240,240), resample=Image.LANCZOS).convert("RGBA")
-    play_icons_dark = Image.open(script_path + '/images/controls-pause-dark.png').resize((240,240), resample=Image.LANCZOS).convert("RGBA")
+    pause_icons = Image.open(script_path + '/images/controls-play.png').resize((240,240), resample=Image.Resampling.LANCZOS).convert("RGBA")
+    pause_icons_dark = Image.open(script_path + '/images/controls-play-dark.png').resize((240,240), resample=Image.Resampling.LANCZOS).convert("RGBA")
+    play_icons = Image.open(script_path + '/images/controls-pause.png').resize((240,240), resample=Image.Resampling.LANCZOS).convert("RGBA")
+    play_icons_dark = Image.open(script_path + '/images/controls-pause-dark.png').resize((240,240), resample=Image.Resampling.LANCZOS).convert("RGBA")
 else:
     # original play and pause icons
-    play_icons = Image.open(script_path + '/images/controls-play.png').resize((240,240), resample=Image.LANCZOS).convert("RGBA")
-    play_icons_dark = Image.open(script_path + '/images/controls-play-dark.png').resize((240,240), resample=Image.LANCZOS).convert("RGBA")
-    pause_icons = Image.open(script_path + '/images/controls-pause.png').resize((240,240), resample=Image.LANCZOS).convert("RGBA")
-    pause_icons_dark = Image.open(script_path + '/images/controls-pause-dark.png').resize((240,240), resample=Image.LANCZOS).convert("RGBA")
+    play_icons = Image.open(script_path + '/images/controls-play.png').resize((240,240), resample=Image.Resampling.LANCZOS).convert("RGBA")
+    play_icons_dark = Image.open(script_path + '/images/controls-play-dark.png').resize((240,240), resample=Image.Resampling.LANCZOS).convert("RGBA")
+    pause_icons = Image.open(script_path + '/images/controls-pause.png').resize((240,240), resample=Image.Resampling.LANCZOS).convert("RGBA")
+    pause_icons_dark = Image.open(script_path + '/images/controls-pause-dark.png').resize((240,240), resample=Image.Resampling.LANCZOS).convert("RGBA")
 
-vol_icons = Image.open(script_path + '/images/controls-vol.png').resize((240,240), resample=Image.LANCZOS).convert("RGBA")
-vol_icons_dark = Image.open(script_path + '/images/controls-vol-dark.png').resize((240,240), resample=Image.LANCZOS).convert("RGBA")
+vol_icons = Image.open(script_path + '/images/controls-vol.png').resize((240,240), resample=Image.Resampling.LANCZOS).convert("RGBA")
+vol_icons_dark = Image.open(script_path + '/images/controls-vol-dark.png').resize((240,240), resample=Image.Resampling.LANCZOS).convert("RGBA")
 
-bt_back = Image.open(script_path + '/images/bta.png').resize((240,240), resample=Image.LANCZOS).convert("RGBA")
-ap_back = Image.open(script_path + '/images/airplay.png').resize((240,240), resample=Image.LANCZOS).convert("RGBA")
-jp_back = Image.open(script_path + '/images/jack.png').resize((240,240), resample=Image.LANCZOS).convert("RGBA")
-sp_back = Image.open(script_path + '/images/spotify.png').resize((240,240), resample=Image.LANCZOS).convert("RGBA")
-sq_back = Image.open(script_path + '/images/squeeze.png').resize((240,240), resample=Image.LANCZOS).convert("RGBA")
-
-draw = ImageDraw.Draw(img, 'RGBA')
+bt_back = Image.open(script_path + '/images/bta.png').resize((240,240), resample=Image.Resampling.LANCZOS).convert("RGBA")
+ap_back = Image.open(script_path + '/images/airplay.png').resize((240,240), resample=Image.Resampling.LANCZOS).convert("RGBA")
+jp_back = Image.open(script_path + '/images/jack.png').resize((240,240), resample=Image.Resampling.LANCZOS).convert("RGBA")
+sp_back = Image.open(script_path + '/images/spotify.png').resize((240,240), resample=Image.Resampling.LANCZOS).convert("RGBA")
+sq_back = Image.open(script_path + '/images/squeeze.png').resize((240,240), resample=Image.Resampling.LANCZOS).convert("RGBA")
 
 
 def isServiceActive(service):
-
+    """Check if a systemd service is active.
+    
+    Polls systemctl up to 30 times with 1 second intervals to determine if the
+    specified service is active. This provides a startup delay for services that
+    need time to initialize.
+    
+    Args:
+        service (str): Name of the systemd service to check (e.g., 'mpd')
+    
+    Returns:
+        bool: True if service is active, False if not active after 30 attempts
+    
+    Example:
+        >>> if isServiceActive('mpd'):
+        ...     print("MPD is running")
+    """
     waiting = True
     count = 0
     active = False
@@ -138,6 +174,30 @@ def isServiceActive(service):
 
 
 def getMoodeMetadata(filename):
+    """Parse Moode Audio metadata from currentsong.txt file.
+    
+    Reads the Moode Audio metadata file and extracts playback information including
+    artist, album, title, cover URL, and audio source type. Handles special cases
+    for radio streams, Bluetooth, Airplay, Spotify, and other input sources.
+    
+    Args:
+        filename (str): Path to the currentsong.txt metadata file
+                       (typically /var/local/www/currentsong.txt)
+    
+    Returns:
+        dict: Dictionary containing metadata with keys:
+            - 'artist': Artist name
+            - 'album': Album name
+            - 'title': Track title
+            - 'file': File path or stream URL
+            - 'coverurl': URL/path to cover art
+            - 'source': Audio source type ('library', 'radio', 'bluetooth',
+                       'airplay', 'spotify', 'squeeze', 'input')
+    
+    Note:
+        For radio streams with combined artist/title (format "Artist - Title"),
+        the function automatically splits them into separate fields.
+    """
     # Initalise dictionary
     metaDict = {}
     
@@ -179,7 +239,27 @@ def getMoodeMetadata(filename):
     return metaDict
 
 def get_cover(metaDict):
-
+    """Retrieve cover art image based on metadata.
+    
+    Searches for and returns album artwork from multiple sources in order of priority:
+    1. Radio station logos (for radio streams)
+    2. Source-specific backgrounds (Bluetooth, Airplay, Spotify, etc.)
+    3. Embedded artwork in audio files
+    4. Folder images (Cover.jpg, Folder.jpg, etc.)
+    5. Default cover image as fallback
+    
+    Args:
+        metaDict (dict): Metadata dictionary from getMoodeMetadata() containing
+                        'source', 'file', and 'coverurl' keys
+    
+    Returns:
+        PIL.Image: Cover art image object (240x240 or will be resized later)
+    
+    Note:
+        For library files, checks for embedded art first, then searches for
+        common cover image filenames in the same directory as the audio file.
+        Supported cover image formats: jpg, jpeg, png, tif, tiff (case-insensitive).
+    """
     cover = None
     cover = Image.open(script_path + '/images/default-cover-v6.jpg')
     covers = ['Cover.jpg', 'cover.jpg', 'Cover.jpeg', 'cover.jpeg', 'Cover.png', 'cover.png', 'Cover.tif', 'cover.tif', 'Cover.tiff', 'cover.tiff',
@@ -221,26 +301,56 @@ def get_cover(metaDict):
 
 
 def main():
-
+    """Main display loop for TFT-MoodeCoverArt.
+    
+    Initializes the display and runs the main event loop that:
+    - Monitors MPD service status
+    - Reads metadata from Moode Audio
+    - Retrieves and caches cover art
+    - Renders text with smooth scrolling
+    - Displays playback overlays and controls
+    - Manages backlight based on playback state
+    
+    The function implements optimizations including:
+    - Cover art caching to avoid redundant resizing
+    - Change detection to minimize CPU usage
+    - Smooth 20fps rendering for text scrolling
+    - Display blanking timeout based on config
+    
+    Raises:
+        KeyboardInterrupt: Caught to gracefully shut down display
+    
+    Note:
+        If MPD service is not active after 30 seconds, displays an error
+        message and stops. The loop runs continuously until interrupted.
+    """
     disp.set_backlight(True)
     
     filename = '/var/local/www/currentsong.txt'
 
     c = 0
-    p = 0
-    k=0
-    ol=0
     ss = 0
-    x1 = 20
-    x2 = 20
-    x3 = 20
+    x1 = 20.0
+    x2 = 20.0
+    x3 = 20.0
     title_top = 105
     volume_top = 184
     time_top = 222
     act_mpd = isServiceActive('mpd')
     SHADE = displayConf['shadow']
+    
+    # Cache variables for optimization
+    prev_cover_path = None
+    cached_cover = None
+    cached_resized_cover = None
+    prev_state = {}
+    needs_redraw = True
+    
+    # Scrolling text tracking
+    has_scrolling_text = False
 
     if act_mpd == True:
+        print("mpd is active")
         while True:
             client = musicpd.MPDClient()   # create client object
             try:     
@@ -249,18 +359,46 @@ def main():
                 pass
             else:                  
                 moode_meta = getMoodeMetadata(filename)
-
-                mpd_current = client.currentsong()
                 mpd_status = client.status()
-                cover = get_cover(moode_meta)
-
-
+                
+                # Check if anything has changed to avoid unnecessary redrawing
+                current_state = {
+                    'file': moode_meta.get('file', ''),
+                    'state': mpd_status.get('state', ''),
+                    'volume': mpd_status.get('volume', ''),
+                    'elapsed': mpd_status.get('elapsed', '')
+                }
+                
+                needs_redraw = (current_state != prev_state) or has_scrolling_text
+                
+                if not needs_redraw:
+                    prev_state = current_state.copy()
+                    time.sleep(0.05)
+                    continue
+                
+                # Get cover with caching
+                cover_path = moode_meta.get('coverurl', '') + moode_meta.get('file', '')
+                if cover_path != prev_cover_path:
+                    cover = get_cover(moode_meta)
+                    cached_cover = cover
+                    cached_resized_cover = cover.resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS)
+                    prev_cover_path = cover_path
+                    # Reset text positions when track changes
+                    x1 = x2 = x3 = 20.0
+                    has_scrolling_text = False
+                else:
+                    cover = cached_cover
+                
+                prev_state = current_state.copy()
                 
                 mn = 50
                 if OVERLAY == 3:
-                    img.paste(cover.resize((WIDTH,HEIGHT), Image.LANCZOS).convert('RGB'))
+                    img.paste(cached_resized_cover.convert('RGB'))
                 else:
-                    img.paste(cover.resize((WIDTH,HEIGHT), Image.LANCZOS).filter(ImageFilter.GaussianBlur).convert('RGB'))
+                    img.paste(cached_resized_cover.filter(ImageFilter.GaussianBlur).convert('RGB'))
+                
+                # Create draw object for this frame
+                draw = ImageDraw.Draw(img, 'RGBA')
                 
                 if 'state' in mpd_status:
                     if ((mpd_status['state'] == 'stop') and (BLANK != 0)) or ((mpd_status['state'] == 'pause') and (BLANK != 0) and (PAUSEBLANK != 0)):
@@ -334,48 +472,90 @@ def main():
                         
                         top = 7
                         if 'artist' in moode_meta:
-                            w1, y1 = draw.textsize(moode_meta['artist'], font_m)
-                            x1 = x1-20
-                            if x1 < (WIDTH - w1 - 20):
-                                x1 = 0
+                            bbox = draw.textbbox((0, 0), moode_meta['artist'], font_m)
+                            w1 = bbox[2] - bbox[0]
+                            
                             if w1 <= WIDTH:
+                                # Center text if it fits
                                 x1 = (WIDTH - w1)//2
+                                if SHADE != 0:
+                                    draw.text((x1+SHADE, top+SHADE), moode_meta['artist'], font=font_m, fill=str_col)
+                                draw.text((x1, top), moode_meta['artist'], font=font_m, fill=txt_col)
+                            else:
+                                # Continuous scrolling with gap
+                                has_scrolling_text = True
+                                x1 = x1 - (SCROLLSPEED * 0.5)
+                                gap = 60  # Gap between repeated text
+                                if x1 < -(w1 + gap):
+                                    x1 = 0
                                 
-                            if SHADE != 0:
-                                draw.text((x1+SHADE, top+SHADE), moode_meta['artist'], font=font_m, fill=str_col)
-
-                            draw.text((x1, top), moode_meta['artist'], font=font_m, fill=txt_col)
+                                # Draw text twice for seamless loop
+                                if SHADE != 0:
+                                    draw.text((int(x1)+SHADE, top+SHADE), moode_meta['artist'], font=font_m, fill=str_col)
+                                    draw.text((int(x1+w1+gap)+SHADE, top+SHADE), moode_meta['artist'], font=font_m, fill=str_col)
+                                draw.text((int(x1), top), moode_meta['artist'], font=font_m, fill=txt_col)
+                                draw.text((int(x1+w1+gap), top), moode_meta['artist'], font=font_m, fill=txt_col)
                         
                         top = 35
                         
                         if 'album' in moode_meta:
-                            w2, y2 = draw.textsize(moode_meta['album'], font_s)
-                            x2 = x2-20
-                            if x2 < (WIDTH - w2 - 20):
-                                x2 = 0
+                            bbox = draw.textbbox((0, 0), moode_meta['album'], font_s)
+                            w2 = bbox[2] - bbox[0]
+                            
                             if w2 <= WIDTH:
+                                # Center text if it fits
                                 x2 = (WIDTH - w2)//2
-                            if SHADE != 0:
-                                draw.text((x2+SHADE, top+SHADE), moode_meta['album'], font=font_s, fill=str_col)
-                            draw.text((x2, top), moode_meta['album'], font=font_s, fill=txt_col)
+                                if SHADE != 0:
+                                    draw.text((x2+SHADE, top+SHADE), moode_meta['album'], font=font_s, fill=str_col)
+                                draw.text((x2, top), moode_meta['album'], font=font_s, fill=txt_col)
+                            else:
+                                # Continuous scrolling with gap
+                                has_scrolling_text = True
+                                x2 = x2 - (SCROLLSPEED * 0.5)
+                                gap = 60
+                                if x2 < -(w2 + gap):
+                                    x2 = 0
+                                
+                                # Draw text twice for seamless loop
+                                if SHADE != 0:
+                                    draw.text((int(x2)+SHADE, top+SHADE), moode_meta['album'], font=font_s, fill=str_col)
+                                    draw.text((int(x2+w2+gap)+SHADE, top+SHADE), moode_meta['album'], font=font_s, fill=str_col)
+                                draw.text((int(x2), top), moode_meta['album'], font=font_s, fill=txt_col)
+                                draw.text((int(x2+w2+gap), top), moode_meta['album'], font=font_s, fill=txt_col)
 
                         
                         if 'title' in moode_meta:
-                            w3, y3 = draw.textsize(moode_meta['title'], font_l)
-                            x3 = x3-20
-                            if x3 < (WIDTH - w3 - 20):
-                                x3 = 0
+                            bbox = draw.textbbox((0, 0), moode_meta['title'], font_l)
+                            w3 = bbox[2] - bbox[0]
+                            
                             if w3 <= WIDTH:
+                                # Center text if it fits
                                 x3 = (WIDTH - w3)//2
-                            if SHADE != 0:
-                                draw.text((x3+SHADE, title_top+SHADE), moode_meta['title'], font=font_l, fill=str_col)
-                            draw.text((x3, title_top), moode_meta['title'], font=font_l, fill=txt_col)
+                                if SHADE != 0:
+                                    draw.text((x3+SHADE, title_top+SHADE), moode_meta['title'], font=font_l, fill=str_col)
+                                draw.text((x3, title_top), moode_meta['title'], font=font_l, fill=txt_col)
+                            else:
+                                # Continuous scrolling with gap
+                                has_scrolling_text = True
+                                x3 = x3 - (SCROLLSPEED * 0.5)
+                                gap = 60
+                                if x3 < -(w3 + gap):
+                                    x3 = 0
+                                
+                                # Draw text twice for seamless loop
+                                if SHADE != 0:
+                                    draw.text((int(x3)+SHADE, title_top+SHADE), moode_meta['title'], font=font_l, fill=str_col)
+                                    draw.text((int(x3+w3+gap)+SHADE, title_top+SHADE), moode_meta['title'], font=font_l, fill=str_col)
+                                draw.text((int(x3), title_top), moode_meta['title'], font=font_l, fill=txt_col)
+                                draw.text((int(x3+w3+gap), title_top), moode_meta['title'], font=font_l, fill=txt_col)
 
 
                 else:
                     if 'file' in moode_meta:
                         txt = moode_meta['file'].replace(' ', '\n')
-                        w3, h3 = draw.multiline_textsize(txt, font_l, spacing=6)
+                        bbox = draw.multiline_textbbox((0, 0), txt, font_l, spacing=6)
+                        w3 = bbox[2] - bbox[0]
+                        h3 = bbox[3] - bbox[1]
                         x3 = (WIDTH - w3)//2
                         y3 = (HEIGHT - h3)//2
                         if SHADE != 0:
@@ -386,18 +566,18 @@ def main():
             disp.display(img)
 
             if c == 0:
-                im7 = img.save(script_path+'/dump.jpg')
+                img.save(script_path+'/dump.jpg')
                 c += 1
 
-
-            time.sleep(1)
-            ol += 1
+            time.sleep(0.05)
 
         client.disconnect()
     else:
+        draw = ImageDraw.Draw(img)
         draw.rectangle((0,0,240,240), fill=(0,0,0))
         txt = 'MPD not Active!\nEnsure MPD is running\nThen restart script'
-        mlw, mlh = draw.multiline_textsize(txt, font=font_m, spacing=4)
+        bbox = draw.multiline_textbbox((0, 0), txt, font=font_m, spacing=4)
+        mlw = bbox[2] - bbox[0]
         draw.multiline_text(((WIDTH-mlw)//2, 20), txt, fill=(255,255,255), font=font_m, spacing=4, align="center")
         disp.display(img)
         

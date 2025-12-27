@@ -1,165 +1,200 @@
-PLEASE NOTE
+# TFT-MoodeCoverArt
 
-I no longer use or update these scripts, so I am unable to provide any support or updates
+Cover art display for Moode Audio on Raspberry Pi with ST7789 TFT displays.
 
-# TFT-MoodeCoverArt 
-*version = "0.0.9" : changes*
-* added config option for blanking display on pause 
-
-*version = "0.0.8" : changes*
-* added config option for switching play and pause icons
-
-*version = "0.0.7" : changes*
-
-* update for moode 7.6.0 - BUG FIX: URL encoding for radio station logos
-
-*version = "0.0.6" : changes*
-
-* added option for text shadow
-
-*version = "0.0.5" : changes*
-
-* radio icons location changed
-
-*version = "0.0.4" : changes*
-
-* added option to display cover art only without overlays (see config file for instructions)
-
-*version = "0.0.3" : changes*
-
-* added option to turn off backlight when mpd state = stop (see config file for instructions)
-
--------------------------------------------------------
-
-
-Based on the look of the pirate audio plugin for mopidy.
-
-Works with Pimoroni pirate audio boards with 240*240 TFT (ST7789), as well as standalone ST7789 boards.
+Based on the look of the pirate audio plugin for mopidy, this project displays album artwork and metadata from your Moode Audio player on a small TFT screen.
 
 ![Sample Image](/pics/display.jpg)
 
-### Features.
+## Features
 
-The script will display cover art (where available) for the moode library or radio stations.
+### Display
+- Cover art display for library tracks and radio stations
+- Embedded album art with fallback to folder images (Cover.jpg, Folder.jpg, etc.)
+- Radio station logos from Moode
+- Configurable overlays with time bar, volume bar, and playback controls
+- Auto-adjusting text colors for light and dark artwork
+- Smooth continuous marquee text scrolling for long titles
+- Support for multiple input sources: Library, Radio, Bluetooth, Airplay, Spotify, Squeezelite
 
-* For the moode library, embedded art will be displayed first, then folder or cover images if there is no embedded art.
-* For radio stations, the moode images are used.
-* If no artwork is found a default image is displayed.
+### Configuration Options
+All settings are configurable via `config.yml`:
+- Display overlays (full, volume only, or artwork only)
+- Time bar display
+- Screen blanking timeout
+- Pause screen blanking
+- Text shadow effects
+- Display rotation (0, 90, 180, 270 degrees)
+- Text scroll speed
+- SPI bus speed
+- Play/pause button display preference
 
-Metadata displayed:
-* Artist
-* Album/Radio Station
-* Title
+### Technical Features
+- Optimized rendering with cover art caching
+- Change detection to minimize CPU usage
+- Smooth 20fps scrolling for long text
+- Virtual environment support for isolated dependencies
+- Systemd service integration for auto-start
+- Safe configuration defaults with graceful fallbacks
 
-Overlays with a Time bar, Volume bar and Play/Pause, Next and Volume icons to match the Pirate Audio buttons are optional.
+## Requirements
 
-There is also an option in config.yml to not display metadata
+- Raspberry Pi with Moode Audio installed
+- Pimoroni Pirate Audio board or compatible ST7789 240x240 TFT display
+- Python 3.7 or higher
+- SPI enabled on Raspberry Pi
 
-The script has a built in test to see if the mpd service is running. This should allow enough delay when 
-used as a service. If a running mpd service is not found after around 30 seconds the script displays the following and stops.
+## Installation
 
-```
-   MPD not Active!
-Ensure MPD is running
- Then restart script
-```
+### 1. Enable SPI
 
-**Limitations**
+See [Configuring SPI](https://learn.adafruit.com/adafruits-raspberry-pi-lesson-4-gpio-setup/configuring-spi)
 
-Metadata will only be displayed for Radio Stations and the Library.
+### 2. Clone the Repository
 
-For the `Airplay`, `Spotify`, `Bluetooth`, `Squeezelite` and `Dac Input` renderers, different backgrounds will display.
-
-The overlay colours adjust for light and dark artwork, but can be hard to read with some artwork.
-
-The script does not search online for artwork
-
-### Assumptions.
-
-**You can SSH into your RPI, enter commands at the shell prompt, and use the nano editor.**
-
-**Your moode installation works and produces audio**
-
-If your pirate audio board doesn't output anything
-
-Choose "Pimoroni pHAT DAC" or "HiFiBerry DAC" in moode audio config
-
-See the Installation section [**here**](https://github.com/pimoroni/pirate-audio) about gpio pin 25. 
-
-
-### Preparation.
-
-**Enable SPI pn your RPI**
-
-see [**Configuring SPI**](https://learn.adafruit.com/adafruits-raspberry-pi-lesson-4-gpio-setup/configuring-spi)
-
-Install these pre-requisites:
-```
-sudo apt-get update
-sudo apt-get install python3-rpi.gpio python3-spidev python3-pip python3-pil python3-numpy
-sudo pip3 install mediafile
-sudo pip3 install pyyaml
-```
-Install the TFT driver.
-
-I have forked the Pimoroni driver and modified it to work with other ST7789 boards. Install it with the following command:
-
-```
-sudo pip3 install RPI-ST7789
-```
-
-***Ensure 'Metadata file' is turned on in Moode System Configuration***
-
-### Install the TFT-MoodeCoverArt script
-
-```
+```bash
 cd /home/pi
-git clone https://github.com/rusconi/TFT-MoodeCoverArt.git
+git clone https://github.com/cachamber/TFT-MoodeCoverArt.git
+cd TFT-MoodeCoverArt
 ```
 
-### Config File
+### 3. Run Installation Script
 
-The default config should work with Pirate Audio boards
+The installation script will:
+- Create a Python virtual environment
+- Install all required dependencies
+- Generate a systemd service file
+- Optionally install and enable the service
 
-The config.yml file can be edited to:
-
-* suit different ST7789 boards
-* set overlay display options
-* display the text with a shadow
-
-The comments in 'config.yml' should be self explanatory
-
-
-**Make the shell scripts executable:**
-
-```
-chmod 777 *.sh
-```
-
-Test the script:
-
-```
-python3 /home/pi/TFT-MoodeCoverArt/tft_moode_coverart.py
-
-
-Ctrl-c to quit
-```
-
-**If the script works, you may want to start the display at boot:**
-
-### Install as a service.
-
-```
-cd /home/pi/TFT-MoodeCoverArt
+```bash
 ./install_service.sh
 ```
 
-Follow the prompts.
+Follow the prompts to install as a service and reboot.
 
-If you wish to remove the script as a service:
+### 4. Manual Installation (Alternative)
 
+If you prefer manual installation:
+
+```bash
+# Create virtual environment
+python3 -m venv tftmoodecoverart
+
+# Activate virtual environment
+source tftmoodecoverart/bin/activate
+
+# Install dependencies
+pip install --upgrade pip
+pip install -r requirements.txt
+
+# Test the script
+python3 tft_moode_coverart.py
 ```
+
+Press Ctrl+C to quit.
+
+## Configuration
+
+Edit `config.yml` to customize your display:
+
+```yaml
+display:
+  overlay: 2           # 0=no overlay, 1=volume only, 2=full overlay, 3=artwork only
+  timebar: 1           # 0=hidden, 1=show progress bar
+  mode: 0              # 0=pirate audio with cs pin, 3=boards without cs pin
+  rotation: 270        # Display rotation: 0, 90, 180, or 270 degrees
+  blank: 60            # Backlight timeout in seconds (0=never)
+  pauseblank: 0        # Blank on pause: 0=stay on, 1=blank
+  shadow: 3            # Text shadow offset in pixels (0=no shadow)
+  ppbutton: 1          # Play/pause button display preference
+  scrollspeed: 2       # Text scroll speed (1=slow, 2=medium, 3+=fast)
+  spi_speed_hz: 100000000  # SPI bus speed (4-100 MHz)
+```
+
+## Usage
+
+### Manual Start
+```bash
+cd /home/pi/TFT-MoodeCoverArt
+source tftmoodecoverart/bin/activate
+python3 tft_moode_coverart.py
+```
+
+### Service Control
+If installed as a service:
+```bash
+# Start
+sudo systemctl start tft-moodecoverart
+
+# Stop
+sudo systemctl stop tft-moodecoverart
+
+# Status
+sudo systemctl status tft-moodecoverart
+
+# Restart after config changes
+sudo systemctl restart tft-moodecoverart
+```
+
+### Remove Service
+```bash
 cd /home/pi/TFT-MoodeCoverArt
 ./remove_service.sh
 ```
 
+## Hardware Compatibility
+
+### Tested Boards
+- Pimoroni Pirate Audio boards (all variants)
+- Generic ST7789 240x240 displays
+
+### Audio Configuration
+If your Pirate Audio board doesn't output audio:
+- In Moode Audio Config, select "Pimoroni pHAT DAC" or "HiFiBerry DAC"
+- See the [Pirate Audio setup guide](https://github.com/pimoroni/pirate-audio) for GPIO pin 25 configuration
+
+## Troubleshooting
+
+### Display Not Working
+- Verify SPI is enabled: `ls /dev/spi*`
+- Check config.yml settings for your board type
+- Try lowering `spi_speed_hz` to 80000000 or 60000000
+
+### No Metadata
+- Ensure "Metadata file" is enabled in Moode System Configuration
+- Check that `/var/local/www/currentsong.txt` exists and updates
+
+### Service Won't Start
+- Check service status: `sudo systemctl status tft-moodecoverart`
+- View logs: `sudo journalctl -u tft-moodecoverart -f`
+- Ensure MPD is running: `systemctl status mpd`
+
+## Limitations
+
+- Metadata display only works for Radio Stations and Library playback
+- For Airplay, Spotify, Bluetooth, Squeezelite, and DAC Input, only source-specific backgrounds are shown
+- No online artwork search
+- Overlay colors may be difficult to read with certain artwork
+
+## Dependencies
+
+See `requirements.txt` for full list:
+- pillow (image processing)
+- python-musicpd (MPD client)
+- RPi.GPIO (GPIO control)
+- st7789 (display driver)
+- PyYAML (config parsing)
+- numpy (calculations)
+- mediafile (audio metadata)
+
+## License
+
+See LICENSE file for details.
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for version history.
+
+## Contributing
+
+This is a community-maintained fork. Contributions welcome!
