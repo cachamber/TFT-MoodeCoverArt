@@ -62,10 +62,13 @@ echo "Service file generated."
 while true
 do
     read -p "Do you wish to install TFT-MoodeCoverArt as a service? " yn
+    case $yn in
+        [Yy]* ) echo -e "Installing Service \n"
+                sudo cp tft-moodecoverart.service /lib/systemd/system
                 sudo chmod 644 /lib/systemd/system/tft-moodecoverart.service
                 sudo systemctl daemon-reload
                 sudo systemctl enable tft-moodecoverart.service
-				echo -e "\nTFT-MoodeCoverArt installed as a service.\n"
+                echo -e "\nTFT-MoodeCoverArt installed as a service.\n"
                 echo -e "Please reboot the Raspberry Pi.\n"
                 break;;
         [Nn]* ) echo -e "Service not installed \n"; break;;
